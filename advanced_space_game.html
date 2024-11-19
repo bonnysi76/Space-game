@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Space Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let spaceship = {
+            x: canvas.width / 2,
+            y: canvas.height - 70,
+            width: 40,
+            height: 60,
+            speed: 5,
+            angle: 0,
+            bullets: [],
+            shield: false,
+            velocityX: 0,
+            velocityY: 0,
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.shield ? "rgba(0, 255, 255, 0.5)" : "white";
+                ctx.beginPath();
+                ctx.moveTo(0, -this.height / 2);
+                ctx.lineTo(-this.width / 2, this.height / 2);
+                ctx.lineTo(this.width / 2, this.height / 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            },
+            shoot() {
+                const bulletAngle = this.angle;
+                this.bullets.push({ 
+                    x: this.x, 
+                    y: this.y, 
+                    speed: 7, 
+                    angle: bulletAngle 
+                });
+                playShootSound(); // Play shoot sound
+            },
+            applyMomentum() {
+                this.velocityX *= 0.99; // Simulate drag
+                this.velocityY *= 0.99; // Simulate drag
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+            }
+        };
+
+        // Background music (optional, include a file "background.mp3")
+        let backgroundMusic = new Audio('background.mp3');
+        backgroundMusic.loop = true;
+        backgroundMusic.play();
+
+        // Sound effects
+        let shootSound = new Audio('shoot.wav');
+        let explosionSound = new Audio('explosion.wav');
+
+        function playShootSound() {
+            shootSound.play();
+        }
+
+        function playExplosionSound() {
+            explosionSound.play();
+        }
+
+        let asteroids = [];
+        let enemies = [];
+        let powerUps = [];
+        let score = 0;
+        let level = 1;
+
+        function createAsteroids() {
+            if (Math.random() < 0.02) {
+                let x = Math.random() * canvas.width;
+                asteroids.push({ x: x, y: 0, size: Math.random() * 20 + 20, speed: Math.random() * 2 + 1 });
+            }
+        }
+
+        function createEnemies() {
+            if (Math.random() < 0.01) {
+                let enemy = {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: 30,
+                    speed: Math.random() * 2 + 1,
+                    move() {
+                        this.x += Math.cos(Math.random() * 2 * Math.PI) * this.speed;
+                        this.y += Math.sin(Math.random() * 2 * Math.PI) * this.speed;
+                    },
+                    draw() {
+                        ctx.fillStyle = "red";
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                };
+                enemies.push(enemy);
+            }
+        }
+
+        function createPowerUps() {
+            if (Math.random() < 0.01) {
+                powerUps.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    type: Math.random() < 0.5 ? "speed" : "shield",
+                    size: 15
+                });
+            }
+        }
+
+        function detectCollisions() {
+            spaceship.bullets.forEach((bullet, bIndex) => {
+                asteroids.forEach((asteroid, aIndex) => {
+                    let dist = Math.hypot(bullet.x - asteroid.x, bullet.y - asteroid.y);
+                    if (dist < asteroid.size) {
+                        spaceship.bullets.splice(bIndex, 1);
+                        asteroids.splice(aIndex, 1);
+                        score += 100; // Increase score on collision
+                        playExplosionSound();
+                    }
+                });
+                enemies.forEach((enemy, eIndex) => {
+                    let dist = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                    if (dist < enemy.size) {
+                        spaceship.bullets.splice(bIndex, 1);
+                        enemies.splice(eIndex, 1);
+                        score += 500; // Increased score for enemy
+                        playExplosionSound();
+                    }
+                });
+            });
+
+            powerUps.forEach((powerUp, index) => {
+                let dist = Math.hypot(spaceship.x - powerUp.x, spaceship.y - powerUp.y);
+                if (dist < powerUp.size + spaceship.width / 2) {
+                    if (powerUp.type === "speed") {
+                        spaceship.speed += 2; // Increase speed
+                    } else if (powerUp.type === "shield") {
+                        spaceship.shield = true; // Activate shield
+                    }
+                    powerUps.splice(index, 1);
+                }
+            });
+        }
+
+        function levelUp() {
+            if (score >= level * 1000) {
+                level++;
+                increaseDifficulty();
+            }
+        }
+
+        function increaseDifficulty() {
+            asteroids.forEach(asteroid => asteroid.speed += 0.5);
+            enemies.forEach(enemy => enemy.speed += 0.5);
+        }
+
+        function updateScore() {
+            ctx.font = "30px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("Score: " + score, 10, 30);
+            ctx.fillText("Level: " + level, 10, 60);
+        }
+
+        function gameOver() {
+            ctx.fillStyle = "red";
+            ctx.font = "50px Arial";
+            ctx.fillText("Game Over!", canvas.width / 2 - 150, canvas.height / 2);
+            ctx.fillText("Score: " + score, canvas.width / 2 - 80, canvas.height / 2 + 60);
+            cancelAnimationFrame(gameLoop); // Stop game loop
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                spaceship.angle -= 0.1; // Rotate left
+            } else if (e.key === 'ArrowRight') {
+                spaceship.angle += 0.1; // Rotate right
+            } else if (e.key === 'ArrowUp') {
+                spaceship.velocityX += Math.cos(spaceship.angle) * spaceship.speed;
+                spaceship.velocityY += Math.sin(spaceship.angle) * spaceship.speed;
+            } else if (e.key === ' ') {
+                spaceship.shoot();
+            }
+            // Keep spaceship within bounds
+            spaceship.x = Math.max(0, Math.min(canvas.width, spaceship.x));
+            spaceship.y = Math.max(0, Math.min(canvas.height, spaceship.y));
+        });
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            spaceship.applyMomentum();
+            spaceship.draw();
+
+            spaceship.bullets.forEach((bullet, index) => {
+                bullet.y -= bullet.speed * Math.sin(bullet.angle);
+                bullet.x += bullet.speed * Math.cos(bullet.angle);
+                if (bullet.y < 0 || bullet.x < 0 || bullet.x > canvas.width) {
+                    spaceship.bullets.splice(index, 1);
+                }
+                ctx.fillStyle = "white";
+                ctx.fillRect(bullet.x - 2, bullet.y, 4, 10);
+            });
+
+            asteroids.forEach((asteroid, index) => {
+                asteroid.y += asteroid.speed;
+                if (asteroid.y > canvas.height) {
+                    asteroids.splice(index, 1);
+                }
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.arc(asteroid.x, asteroid.y, asteroid.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            enemies.forEach((enemy) => {
+                enemy.move();
+                enemy.draw();
+            });
+
+            createAsteroids();
+            createEnemies();
+            createPowerUps();
+            detectCollisions();
+            updateScore();
+            levelUp();
+
+            if (spaceship.shield && Math.random() < 0.05) {
+                spaceship.shield = false; // Shield deactivates randomly after a while
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>
